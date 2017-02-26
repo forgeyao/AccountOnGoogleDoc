@@ -1,17 +1,24 @@
-
-// #ffe599,#a4c2f4,#ea9999,#cfe2f3,#e6b8af,#fce5cd,#d5a6bd,#783f04,#85200c,#4a86e8
+// 工作表“账目明细”里使用的背景色
 var BACKGROUND_COLOR = ['#dd7e6b','#f9cb9c','#b4a7d6','#b6d7a8','#9fc5e8','#76a5af','#c27ba0','#f6b26b','#8e7cc3','#93c47d'];
 
 /**
  * 羽毛球记账
- *
+ * 无论是场地费还是缴费，都执行本函数
  */
-function tallyBadminton() {
+function tally() {
+  // 获取“Input”工作表
   var sheet = SpreadsheetApp.getActive().getSheetByName('Input');
-//  Logger.log('sheet id:' + sheet.getSheetId());
+  // Logger.log('sheet id:' + sheet.getSheetId());
 
   var frozenrows = sheet.getFrozenRows();  // 前面冻结的行数
-  var range = sheet.getRange(frozenrows + 1, 1, sheet.getLastRow() - frozenrows, sheet.getLastColumn());
+  var rownum = sheet.getLastRow();
+  var colnum = sheet.getLastColumn();
+  if(rownum <= frozenrows || colnum <= 1) {
+    Logger.log('未输入或无法获取账目信息');
+    return;
+  }
+
+  var range = sheet.getRange(frozenrows + 1, 1, rownum - frozenrows, colnum);
   var values = range.getValues();
 
   for(var i = 0; i < values.length; ++i) {
@@ -19,16 +26,10 @@ function tallyBadminton() {
           Logger.log('=======开始场地费结算=======');
 
           var users = values[i][2].split('、');
-          var struser = String();
-          for(var j in users) {
-              struser += users[j] + '\n';
-          }
-
-          var strnote = values[i][4] + '\n人均' + values[i][3] / users.length;
+          var strnote = values[i][4] + ' 人均' + (values[i][3] / users.length).toFixed(2);
 
           siteFees(users, values[i][3]);
-
-          writeDetailRecord(values[i][0], values[i][1], struser, 0 - values[i][3], strnote);
+          writeDetailRecord(values[i][0], values[i][1], values[i][2], 0 - values[i][3], strnote);
 
           Logger.log("=======场地费结算结束=======");
       }
@@ -37,10 +38,13 @@ function tallyBadminton() {
 
           var users = [values[i][2]];
           recharge(users, values[i][3]);
-
           writeDetailRecord(values[i][0], values[i][1], values[i][2], values[i][3], values[i][4]);
 
           Logger.log('=======缴费结算结束=======');
+      }
+      else{
+          Logger.log('非法事件');
+          return;
       }
   }
 
@@ -51,7 +55,7 @@ function tallyBadminton() {
 
 /**
  * 场地费
- * 扣总费、扣参与人员平均费、写记录
+ * 扣总费、扣参与人员平均费
  *
  * @param {Range} row 场地费记录，一行
  * @parm {double} fees 场地费
@@ -64,7 +68,9 @@ function siteFees(users, fees) {
     }
 
     // 扣个人
-    userExpenses(users, 0 - fees / users.length)
+    var userfees = (0 - fees/users.length).toFixed(2);
+    Logger.log("人均费：" + userfees.toString());
+    userExpenses(users, userfees)
 }
 
 /**
@@ -90,7 +96,7 @@ function recharge(users, fees) {
 function totalExpenses(location, title, fees) {
     var sheet = SpreadsheetApp.getActive().getSheetByName('资产情况');
     var range = sheet.getRange(location);
-    Logger.log(title + "前：" + range.getValues().toString());
+    var log = title + "：" + range.getValues().toString() + " --> ";
 
     if(range.getCell(1, 1).getValue() == title) {
         var cell = range.getCell(1, 2);
@@ -103,7 +109,7 @@ function totalExpenses(location, title, fees) {
                 range.getCell(1, 3).setValue(cell.getValue());
                 cell.setValue(0);
             }
-            Logger.log(title + "后：" + range.getValues().toString());
+            Logger.log(log + range.getValues().toString());
             return newvalue;
         }
 
@@ -119,12 +125,10 @@ function totalExpenses(location, title, fees) {
             cell.setFontColor('black');
         }
 
-        Logger.log(title + "后：" + range.getValues().toString());
+        Logger.log(log + range.getValues().toString());
     }
     return 0;
 }
-
-
 
 /**
  * 个人账户
@@ -135,7 +139,28 @@ function totalExpenses(location, title, fees) {
 function userExpenses(users, fees) {
     var sheet = SpreadsheetApp.getActive().getSheetByName('资产情况');
     var frozenrows = sheet.getFrozenRows();
-    var range = sheet.getRange(frozenrows + 1, 1, sheet.getLastRow() - frozenrows, sheet.getLastColumn());
+    var rownum = sheet.getLastRow();
+    var colnum = sheet.getLastColumn();
+
+    if(rownum == frozenrows) {
+        for(var i in users) {
+          sheet.appendRow([users[i], fees]);
+          var cell = sheet.getRange(sheet.getLastRow(), 2).getCell(1, 1);
+
+          if(fees < 0) {
+              cell.setFontColor('red')
+                  .setFontWeight('bold');
+          }
+          else {
+              cell.setFontColor('black')
+                  .setFontWeight('bold');
+          }
+          Logger.log("新增用户 :" + users[i] + ',' + fees + ',' + 0);
+        }
+        return;
+    }
+
+    var range = sheet.getRange(frozenrows + 1, 1, rownum - frozenrows, colnum);
     var userdata = range.getValues();
 
     var userarray = [];
@@ -149,10 +174,8 @@ function userExpenses(users, fees) {
         if(index != -1) {    // find
               var cell = range.getCell(index + 1, 2);
               var olddata = cell.getValue();
-              var newdata = olddata + fees;
+              var newdata = parseFloat(olddata) + fees;
 
-              range.getCell(index + 1, 3).setValue(olddata)
-                                         .setFontColor('black');
               cell.setValue(newdata)
               if(newdata < 0) {
                   cell.setFontColor('red');
@@ -164,7 +187,7 @@ function userExpenses(users, fees) {
               Logger.log("用户:" + users[i] + " 金额更新 " + olddata + " -> " + newdata);
           }
           else {   // not find
-              sheet.appendRow([users[i], fees, 0]);
+              sheet.appendRow([users[i], fees]);
               var cell = sheet.getRange(sheet.getLastRow(), 2).getCell(1, 1);
 
               if(fees < 0) {
@@ -179,8 +202,6 @@ function userExpenses(users, fees) {
           }
     }
 }
-
-
 
 /**
  * 写消费记录
@@ -224,6 +245,6 @@ function writeDetailRecord(time, event, name, fees, note) {
     var range = sheet.getRange(frozenrows + 1, 1, 1, 6);
     range.setValues(array);
     range.setBackground(color);
-    Logger.log("write record:" + row.toString());
+    Logger.log("账目：" + row.toString());
 }
 
