@@ -31,7 +31,7 @@ function tally() {
           siteFees(users, values[i][3]);
           writeDetailRecord(values[i][0], values[i][1], values[i][2], 0 - values[i][3], strnote);
 
-          Logger.log("=======场地费结算结束=======");
+          Logger.log('=======场地费结算结束=======');
       }
       else if(values[i][1].trim() == '缴费' || values[i][1].trim() == '充值') {
           Logger.log('=======开始缴费结算=======');
@@ -98,35 +98,28 @@ function totalExpenses(location, title, fees) {
     var range = sheet.getRange(location);
     var log = title + "：" + range.getValues().toString() + " --> ";
 
-    if(range.getCell(1, 1).getValue() == title) {
-        var cell = range.getCell(1, 2);
-        var newvalue = cell.getValue() + fees;
-
-        // 会员卡资产不能为负，
-        // 会员卡资产不够时，先扣完，再从预存资产中扣
-        if(newvalue < 0 && title == '会员卡资产') {
-            if(cell.getValue() > 0) {
-                range.getCell(1, 3).setValue(cell.getValue());
-                cell.setValue(0);
-            }
-            Logger.log(log + range.getValues().toString());
-            return newvalue;
-        }
-
-        range.getCell(1, 3).setValue(cell.getValue())
-                           .setFontColor('black');
-
-        var newvalue = cell.getValue() + fees;
-        cell.setValue(newvalue);
-        if(newvalue < 0) {
-            cell.setFontColor('red');
-        }
-        else {
-            cell.setFontColor('black');
-        }
-
-        Logger.log(log + range.getValues().toString());
+    if(range.getCell(1, 1).getValue() != title) {
+        Logger.log("error. not find " + title);
+        return;
     }
+
+    var cell = range.getCell(1, 2);
+    var newvalue = cell.getValue() + fees;
+
+    // 会员卡资产不能为负，
+    // 会员卡资产不够时，先扣完，再从预存资产中扣
+    if(newvalue < 0 && title == '会员卡资产') {
+        if(cell.getValue() > 0) {
+            cell.setValue(0);
+        }
+        Logger.log(log + range.getValues().toString());
+        return newvalue;
+    }
+
+    cell.setValue(newvalue);
+    cell.setFontColor(newvalue < 0 ? 'red' : 'black');
+
+    Logger.log(log + range.getValues().toString());
     return 0;
 }
 
@@ -144,18 +137,7 @@ function userExpenses(users, fees) {
 
     if(rownum == frozenrows) {
         for(var i in users) {
-          sheet.appendRow([users[i], fees]);
-          var cell = sheet.getRange(sheet.getLastRow(), 2).getCell(1, 1);
-
-          if(fees < 0) {
-              cell.setFontColor('red')
-                  .setFontWeight('bold');
-          }
-          else {
-              cell.setFontColor('black')
-                  .setFontWeight('bold');
-          }
-          Logger.log("新增用户 :" + users[i] + ',' + fees + ',' + 0);
+            addUserAccount(sheet, users[i], fees);
         }
         return;
     }
@@ -173,34 +155,29 @@ function userExpenses(users, fees) {
         var index = userarray.indexOf(users[i].trim());
         if(index != -1) {    // find
               var cell = range.getCell(index + 1, 2);
-              var olddata = cell.getValue();
-              var newdata = parseFloat(olddata) + fees;
+              var olddata = Number(cell.getValue());
+              var newdata = olddata + Number(fees);
 
               cell.setValue(newdata)
-              if(newdata < 0) {
-                  cell.setFontColor('red');
-              }
-              else {
-                  cell.setFontColor('black');
-              }
+              cell.setFontColor(newdata < 0 ? 'red' : 'black');
 
               Logger.log("用户:" + users[i] + " 金额更新 " + olddata + " -> " + newdata);
           }
           else {   // not find
-              sheet.appendRow([users[i], fees]);
-              var cell = sheet.getRange(sheet.getLastRow(), 2).getCell(1, 1);
-
-              if(fees < 0) {
-                  cell.setFontColor('red')
-                      .setFontWeight('bold');
-              }
-              else {
-                  cell.setFontColor('black')
-                      .setFontWeight('bold');
-              }
-              Logger.log("新增用户 :" + users[i] + ',' + fees + ',' + 0);
+              addUserAccount(sheet, users[i], fees);
           }
     }
+}
+
+/**
+ * 新增用户
+ */
+function addUserAccount(sheet, user, fees){
+  sheet.appendRow([user, fees]);
+  var cell = sheet.getRange(sheet.getLastRow(), 2).getCell(1, 1);
+  cell.setFontColor(fees < 0 ? 'red' : 'black')
+      .setFontWeight('bold');
+  Logger.log("新增用户 :" + user + ',' + fees);
 }
 
 /**
